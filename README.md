@@ -8,7 +8,7 @@
 
 ## Архитектура системы (C4 Container Diagram)
 
-См. файл `diagrams/C4-container.png`
+![См. файл `diagrams/C4-container.png`](https://github.com/Aizenlort/SOA_project/blob/main/diagrams/C4-container.png)
 
 ### Описание компонентов
 
