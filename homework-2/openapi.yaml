@@ -1,0 +1,791 @@
+openapi: 3.0.3
+info:
+  title: Marketplace API
+  description: API для управления маркетплейсом (Товары, Заказы, Пользователи)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+
+paths:
+  # --- AUTH ---
+  /auth/register:
+    post:
+      summary: Регистрация пользователя
+      operationId: register_user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email уже зарегистрирован (EMAIL_ALREADY_EXISTS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: Вход в систему
+      operationId: login_user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неверные учётные данные (INVALID_CREDENTIALS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: Обновление access token
+      operationId: refresh_token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Токен обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Невалидный refresh token (REFRESH_TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --- PRODUCTS ---
+  /products:
+    get:
+      summary: Получить список товаров (с пагинацией и фильтрацией)
+      operationId: get_products
+      tags: [Products]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ProductStatus' }
+        - name: category
+          in: query
+          required: false
+          schema: { type: string }
+        - name: min_price
+          in: query
+          required: false
+          schema: { type: number, format: float, minimum: 0 }
+        - name: max_price
+          in: query
+          required: false
+          schema: { type: number, format: float, minimum: 0 }
+      responses:
+        '200':
+          description: Список товаров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPageResponse'
+        '400':
+          description: Ошибка валидации параметров (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Создать товар (Только SELLER)
+      operationId: create_product
+      tags: [Products]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+      responses:
+        '201':
+          description: Товар создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещён (ACCESS_DENIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products/{product_id}:
+    get:
+      summary: Получить товар по ID
+      operationId: get_product
+      tags: [Products]
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Товар найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Товар не найден (PRODUCT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Обновить товар (Только владелец/SELLER или ADMIN)
+      operationId: update_product
+      tags: [Products]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        '200':
+          description: Товар обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещён (ACCESS_DENIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар не найден (PRODUCT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Мягкое удаление товара (перевод в ARCHIVED)
+      operationId: delete_product
+      tags: [Products]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Товар удалён (ARCHIVED)
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещён (ACCESS_DENIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар не найден (PRODUCT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --- ORDERS ---
+  /orders:
+    post:
+      summary: Создать заказ (Только USER или ADMIN)
+      operationId: create_order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещён (ACCESS_DENIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар не найден (PRODUCT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт (PRODUCT_INACTIVE, ORDER_HAS_ACTIVE, INSUFFICIENT_STOCK)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Ошибка промокода (PROMO_CODE_INVALID, PROMO_CODE_MIN_AMOUNT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Превышен лимит частоты (ORDER_LIMIT_EXCEEDED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Получить мои заказы (USER — свои, ADMIN — все)
+      operationId: get_my_orders
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Список заказов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPageResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{order_id}:
+    get:
+      summary: Получить заказ по ID
+      operationId: get_order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Заказ найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Заказ принадлежит другому пользователю (ORDER_OWNERSHIP_VIOLATION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Заказ не найден (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Обновить позиции заказа (только в статусе CREATED)
+      operationId: update_order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+      responses:
+        '200':
+          description: Заказ обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Заказ принадлежит другому пользователю (ORDER_OWNERSHIP_VIOLATION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Заказ не найден (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Недопустимый переход состояния (INVALID_STATE_TRANSITION) или недостаточно товара (INSUFFICIENT_STOCK)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Ошибка промокода (PROMO_CODE_INVALID, PROMO_CODE_MIN_AMOUNT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Превышен лимит частоты (ORDER_LIMIT_EXCEEDED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{order_id}/cancel:
+    post:
+      summary: Отменить заказ
+      operationId: cancel_order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Заказ отменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Заказ принадлежит другому пользователю (ORDER_OWNERSHIP_VIOLATION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Заказ не найден (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Недопустимый переход состояния (INVALID_STATE_TRANSITION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --- PROMO CODES ---
+  /promo-codes:
+    post:
+      summary: Создать промокод (SELLER или ADMIN)
+      operationId: create_promo_code
+      tags: [PromoCodes]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoCodeCreate'
+      responses:
+        '201':
+          description: Промокод создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromoCodeResponse'
+        '400':
+          description: Ошибка валидации (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не авторизован (TOKEN_EXPIRED, TOKEN_INVALID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещён (ACCESS_DENIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Промокод уже существует (PROMO_CODE_ALREADY_EXISTS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- Auth ---
+    UserRegister:
+      type: object
+      required: [email, password, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 6, maxLength: 50 }
+        role: { type: string, enum: [USER, SELLER, ADMIN] }
+
+    UserLogin:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string, enum: [USER, SELLER, ADMIN] }
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: "bearer" }
+
+    # --- Products ---
+    ProductStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, ARCHIVED]
+
+    ProductCreate:
+      type: object
+      required: [name, price, stock, category]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 4000, nullable: true }
+        price: { type: number, format: float, minimum: 0.01 }
+        stock: { type: integer, minimum: 0 }
+        category: { type: string, minLength: 1, maxLength: 100 }
+
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 4000, nullable: true }
+        price: { type: number, format: float, minimum: 0.01 }
+        stock: { type: integer, minimum: 0 }
+        category: { type: string, minLength: 1, maxLength: 100 }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+
+    ProductResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        price: { type: number, format: float }
+        stock: { type: integer }
+        category: { type: string }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        seller_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ProductPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/ProductResponse' }
+        totalElements: { type: integer }
+        pageNumber: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    # --- Orders ---
+    OrderItemCreate:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 999 }
+
+    OrderCreate:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItemCreate' }
+          minItems: 1
+          maxItems: 50
+        promo_code:
+          type: string
+          nullable: true
+          pattern: '^[A-Z0-9_]{4,20}$'
+
+    OrderUpdate:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItemCreate' }
+          minItems: 1
+          maxItems: 50
+        promo_code:
+          type: string
+          nullable: true
+          pattern: '^[A-Z0-9_]{4,20}$'
+
+    OrderItemResponse:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        product_name: { type: string }
+        quantity: { type: integer }
+        price_at_order: { type: number, format: float }
+
+    OrderStatus:
+      type: string
+      enum: [CREATED, PAYMENT_PENDING, PAID, SHIPPED, COMPLETED, CANCELED]
+
+    OrderResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        total_amount: { type: number, format: float }
+        discount_amount: { type: number, format: float }
+        promo_code: { type: string, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItemResponse' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    OrderPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/OrderResponse' }
+        totalElements: { type: integer }
+        pageNumber: { type: integer }
+        pageSize: { type: integer }
+
+    # --- Promo Codes ---
+    DiscountType:
+      type: string
+      enum: [PERCENTAGE, FIXED_AMOUNT]
+
+    PromoCodeCreate:
+      type: object
+      required: [code, discount_type, discount_value, max_uses, valid_from, valid_until]
+      properties:
+        code: { type: string, minLength: 4, maxLength: 20, pattern: '^[A-Z0-9_]+$' }
+        discount_type: { $ref: '#/components/schemas/DiscountType' }
+        discount_value: { type: number, format: float, minimum: 0 }
+        min_order_amount: { type: number, format: float, minimum: 0, default: 0 }
+        max_uses: { type: integer, minimum: 1 }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+
+    PromoCodeResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        discount_type: { $ref: '#/components/schemas/DiscountType' }
+        discount_value: { type: number, format: float }
+        min_order_amount: { type: number, format: float }
+        max_uses: { type: integer }
+        current_uses: { type: integer }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        active: { type: boolean }
+
+    # --- Errors ---
+    ErrorResponse:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        details: { type: object, nullable: true }

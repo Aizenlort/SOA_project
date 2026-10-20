@@ -1,0 +1,5 @@
+venv
+.env
+src/api/models.py
+__pycache__
+.vscode

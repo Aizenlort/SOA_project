@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d marketplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  flyway:
+    image: flyway/flyway:9-alpine
+    command: migrate
+    volumes:
+      - ./db/migrations:/flyway/sql
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/marketplace
+      FLYWAY_USER: user
+      FLYWAY_PASSWORD: password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  user-service:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:password@postgres:5432/marketplace
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

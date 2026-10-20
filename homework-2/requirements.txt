@@ -1,0 +1,23 @@
+# Основной фреймворк
+fastapi==0.109.0
+uvicorn==0.27.0
+
+# Генерация Pydantic-моделей из OpenAPI
+datamodel-code-generator==0.25.6
+
+# Работа с БД
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+
+# Валидация и настройки
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Безопасность (JWT)
+python-jose[cryptography]==3.3.0
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
+
+# Утилиты
+python-multipart==0.0.6
+httpx==0.26.0
