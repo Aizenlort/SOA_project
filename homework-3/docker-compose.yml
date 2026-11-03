@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # ================= PostgreSQL Booking =================
+  postgres-booking:
+    image: postgres:15-alpine
+    container_name: postgres-booking
+    environment:
+      POSTGRES_USER: ${BOOKING_DB_USER}
+      POSTGRES_PASSWORD: ${BOOKING_DB_PASSWORD}
+      POSTGRES_DB: ${BOOKING_DB_NAME}
+    ports:
+      - "${BOOKING_DB_PORT}:5432"
+    volumes:
+      - booking_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BOOKING_DB_USER} -d ${BOOKING_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ================= PostgreSQL Flight =================
+  postgres-flight:
+    image: postgres:15-alpine
+    container_name: postgres-flight
+    environment:
+      POSTGRES_USER: ${FLIGHT_DB_USER}
+      POSTGRES_PASSWORD: ${FLIGHT_DB_PASSWORD}
+      POSTGRES_DB: ${FLIGHT_DB_NAME}
+    ports:
+      - "${FLIGHT_DB_PORT}:5432"
+    volumes:
+      - flight_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FLIGHT_DB_USER} -d ${FLIGHT_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ================= Redis Sentinel =================
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-master
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:${REDIS_MASTER_PORT}"
+    volumes:
+      - ./redis/master.conf:/usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  redis-replica:
+    image: redis:7-alpine
+    container_name: redis-replica
+    command: redis-server /usr/local/etc/redis/redis.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    volumes:
+      - ./redis/replica.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - app-network
+
+  redis-sentinel:
+    image: redis:7-alpine
+    container_name: redis-sentinel
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    ports:
+      - "${REDIS_SENTINEL_PORT}:26379"
+    volumes:
+      - ./redis/sentinel.conf:/usr/local/etc/redis/sentinel.conf
+    networks:
+      - app-network
+
+  # ================= Flyway Migrations =================
+  flyway-booking:
+    image: flyway/flyway:9-alpine
+    container_name: flyway-booking
+    depends_on:
+      postgres-booking:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres-booking:5432/${BOOKING_DB_NAME}
+      FLYWAY_USER: ${BOOKING_DB_USER}
+      FLYWAY_PASSWORD: ${BOOKING_DB_PASSWORD}
+      FLYWAY_CONNECT_RETRIES: 60
+    command: migrate
+    volumes:
+      - ./booking-service/migrations:/flyway/sql
+    restart: "no"
+    networks:
+      - app-network
+
+  flyway-flight:
+    image: flyway/flyway:9-alpine
+    container_name: flyway-flight
+    depends_on:
+      postgres-flight:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres-flight:5432/${FLIGHT_DB_NAME}
+      FLYWAY_USER: ${FLIGHT_DB_USER}
+      FLYWAY_PASSWORD: ${FLIGHT_DB_PASSWORD}
+      FLYWAY_CONNECT_RETRIES: 60
+    command: migrate
+    volumes:
+      - ./flight-service/migrations:/flyway/sql
+    restart: "no"
+    networks:
+      - app-network
+
+  # ================= Python Services =================
+  
+  booking-service:
+    build: ./booking-service
+    container_name: booking-service
+    depends_on:
+      flyway-booking:
+        condition: service_completed_successfully
+    ports:
+      - "${BOOKING_SERVICE_PORT}:8000"
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  flight-service:
+    build: ./flight-service
+    container_name: flight-service
+    depends_on:
+      flyway-flight:
+        condition: service_completed_successfully
+    ports:
+      - "${FLIGHT_SERVICE_GRPC_PORT}:50051"
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+volumes:
+  booking_data:
+  flight_data:
+
+networks:
+  app-network:
+    driver: bridge

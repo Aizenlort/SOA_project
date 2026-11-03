@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package flight;
+
+import "google/protobuf/timestamp.proto";
+
+// === ENUMS ===
+enum FlightStatus {
+  FLIGHT_STATUS_UNSPECIFIED = 0;
+  FLIGHT_STATUS_SCHEDULED = 1;
+  FLIGHT_STATUS_DEPARTED = 2;
+  FLIGHT_STATUS_CANCELLED = 3;
+  FLIGHT_STATUS_COMPLETED = 4;
+}
+
+enum ReservationStatus {
+  RESERVATION_STATUS_UNSPECIFIED = 0;
+  RESERVATION_STATUS_ACTIVE = 1;
+  RESERVATION_STATUS_RELEASED = 2;
+  RESERVATION_STATUS_EXPIRED = 3;
+}
+
+// === MESSAGES ===
+message Flight {
+  string id = 1;
+  string flight_number = 2;
+  string departure_airport = 3;
+  string arrival_airport = 4;
+  google.protobuf.Timestamp departure_time = 5;
+  google.protobuf.Timestamp arrival_time = 6;
+  int32 total_seats = 7;
+  int32 available_seats = 8;
+  double price = 9;
+  FlightStatus status = 10;
+}
+
+message SearchFlightsRequest {
+  string origin = 1;
+  string destination = 2;
+  optional string date = 3; // Формат YYYY-MM-DD
+}
+
+message SearchFlightsResponse {
+  repeated Flight flights = 1;
+}
+
+message GetFlightRequest {
+  string flight_id = 1;
+}
+
+message GetFlightResponse {
+  Flight flight = 1;
+}
+
+message ReserveSeatsRequest {
+  string flight_id = 1;
+  int32 seat_count = 2;
+  string booking_id = 3; // Нужен для идемпотентности (п.8)
+}
+
+message ReserveSeatsResponse {
+  string reservation_id = 1;
+  int32 reserved_seats = 2;
+  double total_price = 3;
+}
+
+message ReleaseReservationRequest {
+  string booking_id = 1;
+}
+
+message ReleaseReservationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// === SERVICE ===
+service FlightService {
+  // Поиск рейсов
+  rpc SearchFlights(SearchFlightsRequest) returns (SearchFlightsResponse);
+  
+  // Получение информации о конкретном рейсе
+  rpc GetFlight(GetFlightRequest) returns (GetFlightResponse);
+  
+  // Резервирование мест (атомарно уменьшает available_seats)
+  rpc ReserveSeats(ReserveSeatsRequest) returns (ReserveSeatsResponse);
+  
+  // Освобождение резервации (возвращает места)
+  rpc ReleaseReservation(ReleaseReservationRequest) returns (ReleaseReservationResponse);
+}
