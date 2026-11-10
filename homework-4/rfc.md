@@ -262,7 +262,7 @@ flowchart TD
     Client -->|1. POST /notifications| API
     API -->|2. INSERT PENDING| DB
     API -->|3. Publish Task| MQ
-    API -->> Client: 202 Accepted
+    API -->|Return 202 Accepted| Client
     MQ -->|4. Consume| Orch
     Orch -->|5a. UPDATE DELIVERED| DB
     Orch -->|5b. UPDATE PUSH_FAILED| DB
